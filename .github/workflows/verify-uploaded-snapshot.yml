@@ -1,0 +1,61 @@
+name: Verify uploaded project snapshot
+
+on:
+  push:
+    branches:
+      - agent/import-uploaded-snapshot
+    paths:
+      - .snapshot/VERIFY
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out update branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/import-uploaded-snapshot
+          fetch-depth: 0
+
+      - name: Generate exact file manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import json
+
+          root = Path('.')
+          excluded = {
+              '.github/workflows/verify-uploaded-snapshot.yml',
+              '.snapshot/VERIFY',
+              '.snapshot-manifest.json',
+          }
+          files = []
+          for path in sorted(item for item in root.rglob('*') if item.is_file()):
+              rel = path.as_posix()
+              if rel.startswith('.git/') or rel in excluded:
+                  continue
+              content = path.read_bytes()
+              files.append({
+                  'path': rel,
+                  'size': len(content),
+                  'sha256': sha256(content).hexdigest(),
+              })
+          manifest = {'file_count': len(files), 'files': files}
+          Path('.snapshot-manifest.json').write_text(
+              json.dumps(manifest, sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          PY
+          rm -f .github/workflows/verify-uploaded-snapshot.yml .snapshot/VERIFY
+          rmdir .snapshot 2>/dev/null || true
+          git config user.name 'privacyOG'
+          git config user.email '102720550+privacyOG@users.noreply.github.com'
+          git add -A
+          git commit -m 'Verify uploaded project snapshot'
+          git push origin HEAD:agent/import-uploaded-snapshot
