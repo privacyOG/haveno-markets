@@ -1,6 +1,6 @@
-import { building } from "$app/environment";
 import chokidar from "chokidar";
 import { and, eq, notInArray, sql } from "drizzle-orm";
+import { building } from "$app/environment";
 import { getPrice, isMoneroQuote } from "$lib/formatPrice";
 import { candlestick, groupBars } from "$lib/getDataForChart";
 import { crypto, fiat } from "$lib/stores";
