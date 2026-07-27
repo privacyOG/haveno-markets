@@ -6,23 +6,24 @@ import { networks } from "$lib/server/context";
 import { db } from "$lib/server/db";
 import { liquidityTable } from "$lib/server/db/schema.js";
 
-const liquidityQuery = db
-	.select({
-		pair: liquidityTable.pair,
-		timestamp: sql`(${liquidityTable.timestamp} - ${liquidityTable.timestamp} % 36e5) / 1e3`,
-		buy_count: max(liquidityTable.buy_count),
-		buy_liquidity: sql`max(${liquidityTable.buy_liquidity}) / 1e12`,
-		sell_count: max(liquidityTable.sell_count),
-		sell_liquidity: sql`max(${liquidityTable.sell_liquidity}) / 1e12`,
-	})
-	.from(liquidityTable)
-	.where(eq(liquidityTable.pair, sql.placeholder("code")))
-	.orderBy(liquidityTable.timestamp)
-	.groupBy(
-		liquidityTable.pair,
-		sql`${liquidityTable.timestamp} - ${liquidityTable.timestamp} % 36e5`,
-	)
-	.prepare();
+const createLiquidityQuery = () =>
+	db
+		.select({
+			pair: liquidityTable.pair,
+			timestamp: sql`(${liquidityTable.timestamp} - ${liquidityTable.timestamp} % 36e5) / 1e3`,
+			buy_count: max(liquidityTable.buy_count),
+			buy_liquidity: sql`max(${liquidityTable.buy_liquidity}) / 1e12`,
+			sell_count: max(liquidityTable.sell_count),
+			sell_liquidity: sql`max(${liquidityTable.sell_liquidity}) / 1e12`,
+		})
+		.from(liquidityTable)
+		.where(eq(liquidityTable.pair, sql.placeholder("code")))
+		.orderBy(liquidityTable.timestamp)
+		.groupBy(
+			liquidityTable.pair,
+			sql`${liquidityTable.timestamp} - ${liquidityTable.timestamp} % 36e5`,
+		)
+		.prepare();
 
 export const GET = async ({ params, url }) => {
 	const code =
@@ -47,7 +48,7 @@ export const GET = async ({ params, url }) => {
 	}
 
 	const liquidity = Map.groupBy(
-		liquidityQuery.all({ code }),
+		createLiquidityQuery().all({ code }),
 		({ pair }) => pair,
 	);
 

@@ -1,5 +1,6 @@
 import chokidar from "chokidar";
 import { and, eq, notInArray, sql } from "drizzle-orm";
+import { building } from "$app/environment";
 import { getPrice, isMoneroQuote } from "$lib/formatPrice";
 import { candlestick, groupBars } from "$lib/getDataForChart";
 import { crypto, fiat } from "$lib/stores";
@@ -57,9 +58,6 @@ const formatFiat = (e) => {
 		fiat.set(e.code, e);
 	});
 };
-
-formatFiat(await Bun.file(files.fiat).json());
-formatCrypto(await Bun.file(files.crypto).json());
 
 const groupedOffers = new Map();
 const groupOffers = (allOffers) => {
@@ -149,7 +147,7 @@ const calculateLiquidity = async () => {
 					buy_count: liquidity.BUY_COUNT,
 					sell_liquidity: liquidity.SELL,
 					sell_count: liquidity.SELL_COUNT,
-					network: 1, // reto
+					network: 1,
 					newest: 1,
 					timestamp,
 				};
@@ -278,9 +276,6 @@ const formatOffers = (e) => {
 	calculateLiquidity();
 };
 
-formatTrades(await Bun.file(files.trades).json());
-formatOffers(await Bun.file(files.offers).json());
-
 const networks = {
 	reto: {
 		id: "reto",
@@ -293,35 +288,7 @@ const networks = {
 	},
 };
 
-const watcher = chokidar
-	.watch(import.meta.env.VITE_DB_PATH, {
-		depth: 0,
-		ignored: (path) => {
-			return (
-				!Object.values(files).includes(path) &&
-				path !== import.meta.env.VITE_DB_PATH
-			);
-		},
-		ignoreInitial: true,
-		awaitWriteFinish: true,
-	})
-	.on("all", async (_, filename) => {
-		const file = Bun.file(filename);
-		switch (filename) {
-			case files.offers:
-				formatOffers(await file.json());
-				break;
-			case files.trades:
-				formatTrades(await file.json());
-				break;
-			case files.crypto:
-				formatCrypto(await file.json());
-				break;
-			case files.fiat:
-				formatFiat(await file.json());
-				break;
-		}
-	});
+let watcher;
 
 const priceIndex = new Map();
 const formatPriceIndex = async () => {
@@ -387,21 +354,58 @@ const formatPriceIndex = async () => {
 	priceIndex.set("XMR", { time: 0, value: 1 });
 };
 
-await formatPriceIndex();
-setInterval(
-	async () => {
-		await formatPriceIndex();
-	},
-	15 * 60 * 1000,
-);
+if (!building) {
+	formatFiat(await Bun.file(files.fiat).json());
+	formatCrypto(await Bun.file(files.crypto).json());
+	formatTrades(await Bun.file(files.trades).json());
+	formatOffers(await Bun.file(files.offers).json());
 
-process.on("SIGINT", () => {
-	// close watcher when Ctrl-C is pressed
-	console.log("Closing watcher...");
-	watcher.close();
+	watcher = chokidar
+		.watch(import.meta.env.VITE_DB_PATH, {
+			depth: 0,
+			ignored: (path) => {
+				return (
+					!Object.values(files).includes(path) &&
+					path !== import.meta.env.VITE_DB_PATH
+				);
+			},
+			ignoreInitial: true,
+			awaitWriteFinish: true,
+		})
+		.on("all", async (_, filename) => {
+			const file = Bun.file(filename);
+			switch (filename) {
+				case files.offers:
+					formatOffers(await file.json());
+					break;
+				case files.trades:
+					formatTrades(await file.json());
+					break;
+				case files.crypto:
+					formatCrypto(await file.json());
+					break;
+				case files.fiat:
+					formatFiat(await file.json());
+					break;
+			}
+		});
 
-	process.exit(0);
-});
+	await formatPriceIndex();
+	setInterval(
+		async () => {
+			await formatPriceIndex();
+		},
+		15 * 60 * 1000,
+	);
+
+	process.on("SIGINT", () => {
+		console.log("Closing watcher...");
+		watcher.close();
+		process.exit(0);
+	});
+} else {
+	priceIndex.set("XMR", { time: 0, value: 1 });
+}
 
 export {
 	groupedOffers,
