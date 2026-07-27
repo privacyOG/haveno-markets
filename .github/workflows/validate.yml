@@ -30,24 +30,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run lint checks
-        shell: bash
-        run: |
-          set -o pipefail
-          bun run lint 2>&1 | tee lint.log
+        run: bun run lint
 
       - name: Build production bundle
-        shell: bash
-        run: |
-          set -o pipefail
-          bun run build 2>&1 | tee build.log
-
-      - name: Upload validation logs
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: validation-logs
-          path: |
-            lint.log
-            build.log
-          if-no-files-found: warn
-          retention-days: 1
+        run: bun run build
